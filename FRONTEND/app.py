@@ -70,47 +70,250 @@ st.set_page_config(
 # Custom CSS for better UI
 st.markdown("""
 <style>
+    /* Global Styles */
+    :root {
+        --primary: #0066cc;
+        --secondary: #00a8e8;
+        --accent: #00d9ff;
+        --dark: #0a1e3f;
+        --light: #f8fbff;
+        --success: #00b894;
+        --warning: #fdcb6e;
+        --danger: #e74c3c;
+    }
+    
+    * {
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    
+    /* Main Layout */
     .main {
-        padding: 1rem;
+        padding: 2rem 1rem;
+        background: linear-gradient(135deg, #f8fbff 0%, #e8f4f8 100%);
     }
-    .stAlert {
-        margin-top: 1rem;
+    
+    /* Sidebar */
+    [data-testid="stSidebar"] {
+        background: linear-gradient(180deg, #0a1e3f 0%, #1a3a52 100%);
     }
-    .metric-card {
-        background: #f8f9fa;
-        padding: 1rem;
-        border-radius: 10px;
-        border: 1px solid #e9ecef;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    
+    [data-testid="stSidebar"] > div:first-child {
+        background: transparent !important;
     }
+    
+    /* Hero Section */
     .hero-section {
-        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
-        padding: 2rem;
-        border-radius: 15px;
+        background: linear-gradient(135deg, #0066cc 0%, #00a8e8 50%, #00d9ff 100%);
+        padding: 3rem 2rem;
+        border-radius: 20px;
         color: white;
         text-align: center;
-        margin-bottom: 2rem;
+        margin-bottom: 2.5rem;
+        box-shadow: 0 10px 40px rgba(0, 102, 204, 0.2);
+        animation: slideInDown 0.6s ease-out;
     }
+    
+    .hero-section h1 {
+        font-size: 2.5rem;
+        font-weight: 700;
+        margin-bottom: 0.5rem;
+        text-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    
+    .hero-section p {
+        font-size: 1.1rem;
+        font-weight: 300;
+        opacity: 0.95;
+    }
+    
+    /* Cards and Containers */
+    .metric-card {
+        background: rgba(255, 255, 255, 0.95);
+        padding: 1.5rem;
+        border-radius: 15px;
+        border: 1px solid rgba(0, 102, 204, 0.1);
+        box-shadow: 0 8px 32px rgba(0, 102, 204, 0.08);
+        backdrop-filter: blur(10px);
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .metric-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 12px 40px rgba(0, 102, 204, 0.15);
+        border-color: rgba(0, 168, 232, 0.3);
+    }
+    
+    .info-card {
+        background: linear-gradient(135deg, rgba(0, 168, 232, 0.1) 0%, rgba(0, 217, 255, 0.1) 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        border-left: 4px solid #00a8e8;
+        box-shadow: 0 4px 15px rgba(0, 168, 232, 0.1);
+    }
+    
+    /* Buttons */
     .stButton > button {
-        background-color: #2c3e50;
+        background: linear-gradient(135deg, #0066cc 0%, #00a8e8 100%);
         color: white;
         border: none;
-        border-radius: 8px;
-        transition: all 0.3s ease;
+        border-radius: 10px;
+        padding: 0.75rem 2rem !important;
+        font-weight: 600;
+        font-size: 0.95rem;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        box-shadow: 0 4px 15px rgba(0, 102, 204, 0.3);
     }
+    
     .stButton > button:hover {
-        background-color: #34495e;
+        background: linear-gradient(135deg, #0052a3 0%, #008fb8 100%);
         transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+        box-shadow: 0 8px 25px rgba(0, 102, 204, 0.4);
     }
-    .stSelectbox > div > div {
-        background-color: #f8f9fa;
+    
+    .stButton > button:active {
+        transform: translateY(0);
+        box-shadow: 0 4px 15px rgba(0, 102, 204, 0.3);
     }
-    .stTextInput > div > div > input {
-        background-color: #f8f9fa;
+    
+    /* Forms */
+    .stSelectbox > div > div, 
+    .stTextInput > div > div > input, 
+    .stTextArea > div > div > textarea,
+    .stNumberInput > div > div > input {
+        background-color: rgba(255, 255, 255, 0.9) !important;
+        border: 1.5px solid rgba(0, 102, 204, 0.2) !important;
+        border-radius: 10px !important;
+        transition: all 0.3s ease !important;
     }
-    .stTextArea > div > div > textarea {
-        background-color: #f8f9fa;
+    
+    .stSelectbox > div > div:hover,
+    .stTextInput > div > div > input:hover, 
+    .stTextArea > div > div > textarea:hover,
+    .stNumberInput > div > div > input:hover {
+        border-color: rgba(0, 168, 232, 0.5) !important;
+        box-shadow: 0 0 0 3px rgba(0, 168, 232, 0.1) !important;
+    }
+    
+    .stSelectbox > div > div:focus-within,
+    .stTextInput > div > div > input:focus, 
+    .stTextArea > div > div > textarea:focus,
+    .stNumberInput > div > div > input:focus {
+        border-color: #00a8e8 !important;
+        box-shadow: 0 0 0 3px rgba(0, 168, 232, 0.2) !important;
+    }
+    
+    /* Alerts */
+    .stAlert {
+        margin: 1.5rem 0;
+        border-radius: 12px;
+        animation: slideIn 0.3s ease-out;
+    }
+    
+    .stSuccess {
+        background: linear-gradient(135deg, rgba(0, 184, 148, 0.1) 0%, rgba(0, 217, 255, 0.05) 100%) !important;
+        border: 1px solid rgba(0, 184, 148, 0.3) !important;
+        border-radius: 12px !important;
+    }
+    
+    .stWarning {
+        background: linear-gradient(135deg, rgba(253, 203, 110, 0.1) 0%, rgba(253, 203, 110, 0.05) 100%) !important;
+        border: 1px solid rgba(253, 203, 110, 0.3) !important;
+        border-radius: 12px !important;
+    }
+    
+    .stError {
+        background: linear-gradient(135deg, rgba(231, 76, 60, 0.1) 0%, rgba(231, 76, 60, 0.05) 100%) !important;
+        border: 1px solid rgba(231, 76, 60, 0.3) !important;
+        border-radius: 12px !important;
+    }
+    
+    .stInfo {
+        background: linear-gradient(135deg, rgba(0, 102, 204, 0.1) 0%, rgba(0, 168, 232, 0.1) 100%) !important;
+        border: 1px solid rgba(0, 102, 204, 0.3) !important;
+        border-radius: 12px !important;
+    }
+    
+    /* Tabs */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 0.5rem;
+    }
+    
+    .stTabs [data-baseweb="tab"] {
+        background: rgba(255, 255, 255, 0.7) !important;
+        border-radius: 10px 10px 0 0 !important;
+        border: 1px solid rgba(0, 102, 204, 0.1) !important;
+        padding: 0.75rem 1.5rem !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .stTabs [aria-selected="true"] {
+        background: linear-gradient(135deg, #0066cc 0%, #00a8e8 100%) !important;
+        color: white !important;
+        box-shadow: 0 4px 15px rgba(0, 102, 204, 0.3) !important;
+    }
+    
+    /* Expander */
+    .streamlit-expanderHeader {
+        background: rgba(0, 102, 204, 0.08) !important;
+        border-radius: 10px !important;
+        transition: all 0.3s ease !important;
+    }
+    
+    .streamlit-expanderHeader:hover {
+        background: rgba(0, 102, 204, 0.12) !important;
+    }
+    
+    /* Text Elements */
+    h1, h2, h3 {
+        color: #0a1e3f;
+        font-weight: 700;
+    }
+    
+    h1 { font-size: 2rem; margin-top: 1.5rem; }
+    h2 { font-size: 1.5rem; }
+    h3 { font-size: 1.2rem; }
+    
+    /* Images */
+    img {
+        border-radius: 15px;
+        box-shadow: 0 8px 24px rgba(0, 102, 204, 0.15);
+        max-width: 100%;
+    }
+    
+    /* Animations */
+    @keyframes slideInDown {
+        from {
+            opacity: 0;
+            transform: translateY(-20px);
+        }
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+    
+    @keyframes slideIn {
+        from {
+            opacity: 0;
+            transform: translateX(-10px);
+        }
+        to {
+            opacity: 1;
+            transform: translateX(0);
+        }
+    }
+    
+    /* Responsive */
+    @media (max-width: 768px) {
+        .main {
+            padding: 1rem 0.5rem;
+        }
+        .hero-section {
+            padding: 2rem 1rem;
+        }
+        .hero-section h1 {
+            font-size: 1.8rem;
+        }
     }
 </style>
 """, unsafe_allow_html=True)
@@ -583,77 +786,116 @@ def home_page():
     """, unsafe_allow_html=True)
     
     # System Status
-    st.subheader("🔧 System Status")
+    st.subheader("🔧 System Status", divider="blue")
     
-    col1, col2, col3, col4 = st.columns(4)
+    col1, col2, col3, col4 = st.columns(4, gap="medium")
     
     backend_status = check_backend_connection()
     
     with col1:
-        if backend_status:
-            st.success("🟢 Backend Online")
-        else:
-            st.error("🔴 Backend Offline")
+        st.markdown("""
+        <div class="metric-card">
+            <div style="font-size: 2rem; text-align: center;">🟢</div>
+            <div style="text-align: center; font-weight: 600; margin-top: 0.5rem;">
+                Backend: """ + ("Online" if backend_status else "Offline") + """
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col2:
-        st.info("🟢 Frontend Active")
+        st.markdown("""
+        <div class="metric-card">
+            <div style="font-size: 2rem; text-align: center;">🟢</div>
+            <div style="text-align: center; font-weight: 600; margin-top: 0.5rem;">
+                Frontend: Active
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col3:
-        st.info("🟢 Database Ready")
+        st.markdown("""
+        <div class="metric-card">
+            <div style="font-size: 2rem; text-align: center;">🟢</div>
+            <div style="text-align: center; font-weight: 600; margin-top: 0.5rem;">
+                Database: Ready
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col4:
-        st.info("🟢 AI Models Loaded")
+        st.markdown("""
+        <div class="metric-card">
+            <div style="font-size: 2rem; text-align: center;">🟢</div>
+            <div style="text-align: center; font-weight: 600; margin-top: 0.5rem;">
+                AI Models: Loaded
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+    
+    st.markdown("")
     
     # Quick Actions
-    st.subheader("🚀 Quick Actions")
+    st.subheader("🚀 Quick Actions", divider="blue")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3 = st.columns(3, gap="medium")
     
     with col1:
-        if st.button("🔍 Verify Prescription", use_container_width=True):
+        if st.button("🔍 Verify Prescription", use_container_width=True, key="home_btn1"):
             st.session_state.page = "prescription"
             st.rerun()
     
     with col2:
-        if st.button("💊 Drug Interactions", use_container_width=True):
+        if st.button("💊 Drug Interactions", use_container_width=True, key="home_btn2"):
             st.session_state.page = "interactions"
             st.rerun()
     
     with col3:
-        if st.button("👋 Gesture Detection", use_container_width=True):
+        if st.button("👋 Gesture Detection", use_container_width=True, key="home_btn3"):
             st.session_state.page = "gesture"
             st.rerun()
     
-    # Features Overview
-    st.subheader("✨ Key Features")
+    st.markdown("")
     
-    col1, col2 = st.columns(2)
+    # Features Overview
+    st.subheader("✨ Key Features", divider="blue")
+    
+    col1, col2, col3 = st.columns(3, gap="medium")
     
     with col1:
         st.markdown("""
-        **🔍 Prescription Verification**
-        - AI-powered prescription analysis
-        - Safety scoring and recommendations
-        - Patient profile integration
-        - Real-time verification
-        """)
+        <div class="info-card">
+        <h3 style="margin-top: 0; color: #0066cc;">🔍 Prescription Verification</h3>
         
-        st.markdown("""
-        **💊 Drug Interaction Analysis**
-        - Comprehensive interaction database
-        - Contraindication checking
-        - Alternative medication suggestions
-        - Patient-specific risk assessment
-        """)
+        - AI-powered analysis
+        - Safety scoring
+        - Patient profiles
+        - Real-time checks
+        </div>
+        """, unsafe_allow_html=True)
     
     with col2:
         st.markdown("""
-        **👋 Emergency Gesture Detection**
-        - Real-time hand gesture recognition
-        - Silent emergency alerts
-        - Camera-based detection
-        - Immediate response system
-        """)
+        <div class="info-card">
+        <h3 style="margin-top: 0; color: #0066cc;">💊 Drug Interactions</h3>
+        
+        - Interaction database
+        - Contraindications
+        - Alternatives
+        - Risk assessment
+        </div>
+        """, unsafe_allow_html=True)
+    
+    with col3:
+        st.markdown("""
+        <div class="info-card">
+        <h3 style="margin-top: 0; color: #0066cc;">👋 Emergency Detection</h3>
+        
+        - Hand recognition
+        - Silent alerts
+        - Camera detection
+        - Immediate response
+        </div>
+        """, unsafe_allow_html=True)
         
         st.markdown("""
         **🤖 AI-Powered Analysis**
@@ -1291,10 +1533,10 @@ def main():
             menu_icon="hospital",
             default_index=0,
             styles={
-                "container": {"padding": "0!important", "background-color": "#f8f9fa"},
-                "icon": {"color": "#2c3e50", "font-size": "20px"},
-                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "0px", "--hover-color": "#e9ecef"},
-                "nav-link-selected": {"background-color": "#2c3e50"},
+                "container": {"padding": "0.5rem 0", "background-color": "transparent"},
+                "icon": {"color": "#00d9ff", "font-size": "20px"},
+                "nav-link": {"font-size": "15px", "text-align": "left", "margin": "0.3rem 0", "padding": "0.75rem 1rem", "border-radius": "8px", "color": "white", "--hover-color": "rgba(0, 168, 232, 0.3)"},
+                "nav-link-selected": {"background-color": "rgba(0, 217, 255, 0.2)", "color": "#00d9ff", "font-weight": "600"},
             }
         )
         st.markdown("---")
