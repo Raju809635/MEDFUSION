@@ -1185,6 +1185,19 @@ def gesture_page():
     st.title("👋 Emergency Gesture Detection")
     st.markdown("Real-time hand gesture detection for emergency situations")
     
+    # Show cloud notice if using Render
+    if BACKEND_MODE == "Render Cloud":
+        st.warning("""
+        ℹ️ **Cloud Limitation:** Gesture detection with camera requires a local setup.
+        
+        **To use gesture detection:**
+        - Run the app locally on your machine: `streamlit run FRONTEND/app.py`
+        - Camera access works only on local installations
+        - Cloud servers don't have webcam access
+        
+        The backend is live on Render, but gesture detection is a local-only feature.
+        """)
+    
     # Initialize session state for gesture detection
     if 'gesture_active' not in st.session_state:
         st.session_state.gesture_active = False
@@ -1338,8 +1351,11 @@ def gesture_page():
                         st.error("Backend not available")
                         
         else:
-            st.error("❌ Camera not available (OpenCV not installed)")
-            st.info("Install OpenCV: `pip install opencv-python`")
+            if BACKEND_MODE == "Render Cloud":
+                st.info("📱 **Local Setup Required**: Camera features only work when running locally")
+            else:
+                st.error("❌ Camera not available (OpenCV not installed)")
+                st.info("Install OpenCV: `pip install opencv-python`")
             
             # Fallback: Backend-only detection
             if st.button("🧪 Use Backend Detection", type="primary"):
