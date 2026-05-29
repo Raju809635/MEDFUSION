@@ -1,4 +1,5 @@
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from prescription import check_prescription, extract_medications, check_drug_interactions
 from typing import Dict, List, Optional
@@ -11,6 +12,15 @@ except Exception as e:
     print(f"Warning: Gesture detection unavailable: {e}")
 
 app = FastAPI(title="MedFusion Backend")
+
+# Enable CORS for Streamlit Cloud and local development
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins (secure in production by listing specific URLs)
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Data models
 class Prescription(BaseModel):

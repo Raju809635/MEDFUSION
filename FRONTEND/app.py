@@ -30,8 +30,23 @@ except Exception:
     OCR_AVAILABLE = False
 
 # Configuration
-API_BASE_URL = "http://localhost:8000"
+LOCAL_BACKEND_URL = "http://localhost:8000"
+RENDER_BACKEND_URL = "https://medfusion-mdhi.onrender.com"
 BACKEND_TIMEOUT = 5
+
+# Smart backend detection - try local first, fall back to Render
+@st.cache_resource
+def get_backend_url():
+    """Auto-detect best backend URL: local if running, otherwise Render"""
+    try:
+        response = requests.get(f"{LOCAL_BACKEND_URL}/", timeout=2)
+        if response.status_code == 200:
+            return LOCAL_BACKEND_URL, "Local"
+    except:
+        pass
+    return RENDER_BACKEND_URL, "Render Cloud"
+
+API_BASE_URL, BACKEND_MODE = get_backend_url()
 
 # Emergency Contact Configuration
 DOCTOR_PHONE = "6304679550"  # Doctor's phone number
@@ -1210,7 +1225,8 @@ def main():
         st.markdown("---")
         st.markdown("### 🔧 Backend Status")
         if check_backend_connection():
-            st.success("🟢 Connected")
+            st.success(f"🟢 {BACKEND_MODE}")
+            st.caption(f"API: {API_BASE_URL}")
         else:
             st.error("🔴 Disconnected")
             st.info("Start backend:\n`cd BACKEND`\n`uvicorn main:app --reload`")
