@@ -315,6 +315,19 @@ st.markdown("""
             font-size: 1.8rem;
         }
     }
+    
+    /* Navigation Menu - Fix Text Visibility */
+    [data-testid="stSidebar"] span {
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] button {
+        color: white !important;
+    }
+    
+    .streamlit-expanderHeader {
+        color: white !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1535,8 +1548,8 @@ def main():
             styles={
                 "container": {"padding": "0.5rem 0", "background-color": "transparent"},
                 "icon": {"color": "#00d9ff", "font-size": "20px"},
-                "nav-link": {"font-size": "15px", "text-align": "left", "margin": "0.3rem 0", "padding": "0.75rem 1rem", "border-radius": "8px", "color": "white", "--hover-color": "rgba(0, 168, 232, 0.3)"},
-                "nav-link-selected": {"background-color": "rgba(0, 217, 255, 0.2)", "color": "#00d9ff", "font-weight": "600"},
+                "nav-link": {"font-size": "15px", "text-align": "left", "margin": "0.3rem 0", "padding": "0.75rem 1rem", "border-radius": "8px", "color": "#ffffff", "font-weight": "500", "--hover-color": "rgba(0, 168, 232, 0.3)"},
+                "nav-link-selected": {"background-color": "rgba(0, 217, 255, 0.3)", "color": "#00d9ff", "font-weight": "700"},
             }
         )
         st.markdown("---")
