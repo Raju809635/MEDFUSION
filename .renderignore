@@ -1,0 +1,7 @@
+FRONTEND
+node_modules
+.git
+.gitignore
+README.md
+*.md
+start_*.bat

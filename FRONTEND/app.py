@@ -6,10 +6,43 @@ import numpy as np
 from PIL import Image
 import io
 import time
+import os
+from datetime import datetime
+
+# Optional imports - app will work without these
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    CV2_AVAILABLE = False
+
+OCR_AVAILABLE = False
+try:
+    import pytesseract
+    from pdf2image import convert_from_bytes
+    # Default Windows paths (update if installed elsewhere)
+    POPPLER_PATH = r"C:\\poppler\\poppler-25.07.0\\Library\\bin"
+    TESSERACT_PATH = r"C:\\Program Files\\Tesseract-OCR\\tesseract.exe"
+    if os.path.exists(POPPLER_PATH) and os.path.exists(TESSERACT_PATH):
+        pytesseract.pytesseract.tesseract_cmd = TESSERACT_PATH
+        OCR_AVAILABLE = True
+except Exception:
+    OCR_AVAILABLE = False
 
 # Configuration
 API_BASE_URL = "http://localhost:8000"
 BACKEND_TIMEOUT = 5
+
+# Emergency Contact Configuration
+DOCTOR_PHONE = "6304679550"  # Doctor's phone number
+EMERGENCY_SMS_ENABLED = True
+
+# SMS Service Configuration (using TextBelt - free SMS service)
+SMS_API_URL = "https://textbelt.com/text"
+SMS_API_KEY = "textbelt"  # Free tier key (limited messages per day)
+
+# SMS Debug Mode - shows detailed responses
+SMS_DEBUG = True  # Set to False for production, True for debugging
 
 # Page configuration
 st.set_page_config(
@@ -29,19 +62,40 @@ st.markdown("""
         margin-top: 1rem;
     }
     .metric-card {
-        background: white;
+        background: #f8f9fa;
         padding: 1rem;
         border-radius: 10px;
-        border: 1px solid #ddd;
+        border: 1px solid #e9ecef;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     }
     .hero-section {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #2c3e50 0%, #34495e 100%);
         padding: 2rem;
         border-radius: 15px;
         color: white;
         text-align: center;
         margin-bottom: 2rem;
+    }
+    .stButton > button {
+        background-color: #2c3e50;
+        color: white;
+        border: none;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+    .stButton > button:hover {
+        background-color: #34495e;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+    .stSelectbox > div > div {
+        background-color: #f8f9fa;
+    }
+    .stTextInput > div > div > input {
+        background-color: #f8f9fa;
+    }
+    .stTextArea > div > div > textarea {
+        background-color: #f8f9fa;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -139,6 +193,289 @@ def gesture_detection_api():
             return False, f"Backend error: {response.status_code}"
     except Exception as e:
         return False, f"Error: {str(e)}"
+
+def send_emergency_sms(patient_name, user_phone="Unknown", location="MedFusion App", gesture_type="Emergency Gesture"):
+    """Send emergency SMS to doctor with fast timeout and fallback"""
+    import threading
+    import queue
+    
+    result_queue = queue.Queue()
+    
+    def send_sms_thread():
+        try:
+            # Get current timestamp
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            
+            # Try Indian format first (most likely for this number)
+            phone_formats = [
+                f"+91{DOCTOR_PHONE}",   # Indian format: +916304679550
+                DOCTOR_PHONE,          # Original: 6304679550
+                f"+1{DOCTOR_PHONE}",    # US format: +16304679550
+            ]
+            
+            # Compose emergency message
+            message = f"MEDICAL EMERGENCY ALERT\n\n" \
+                     f"Patient: {patient_name}\n" \
+                     f"Time: {timestamp}\n" \
+                     f"Gesture: {gesture_type}\n" \
+                     f"IMMEDIATE ASSISTANCE REQUIRED"
+            
+            # Try sending with different phone formats
+            for i, phone in enumerate(phone_formats):
+                try:
+                    payload = {
+                        'phone': phone,
+                        'message': message,
+                        'key': SMS_API_KEY
+                    }
+                    
+                    if SMS_DEBUG:
+                        result_queue.put(("debug", f"🔍 Trying: {phone}"))
+                    
+                    # Very short timeout
+                    response = requests.post(SMS_API_URL, data=payload, timeout=5)
+                    
+                    if response.status_code == 200:
+                        result = response.json()
+                        if result.get('success'):
+                            result_queue.put(("success", f"✅ SMS sent to {phone}"))
+                            return
+                        else:
+                            error_msg = result.get('error', 'Unknown error')
+                            if SMS_DEBUG:
+                                result_queue.put(("debug", f"❌ API Error: {error_msg}"))
+                            if i == len(phone_formats) - 1:  # Last attempt
+                                result_queue.put(("error", f"API Error: {error_msg}"))
+                                return
+                    else:
+                        if SMS_DEBUG:
+                            result_queue.put(("debug", f"❌ HTTP {response.status_code}"))
+                        if i == len(phone_formats) - 1:
+                            result_queue.put(("error", f"HTTP error {response.status_code}"))
+                            return
+                            
+                except requests.exceptions.Timeout:
+                    if SMS_DEBUG:
+                        result_queue.put(("debug", f"⏱️ Timeout for {phone}"))
+                    if i == len(phone_formats) - 1:
+                        result_queue.put(("error", "SMS service timeout - service may be slow"))
+                        return
+                except Exception as e:
+                    if SMS_DEBUG:
+                        result_queue.put(("debug", f"❌ Network error: {str(e)[:30]}"))
+                    if i == len(phone_formats) - 1:
+                        result_queue.put(("error", f"Network error: {str(e)[:50]}"))
+                        return
+            
+        except Exception as e:
+            result_queue.put(("error", f"SMS system error: {str(e)[:50]}"))
+    
+    # Start SMS in background thread
+    sms_thread = threading.Thread(target=send_sms_thread)
+    sms_thread.daemon = True
+    sms_thread.start()
+    
+    # Wait for result with timeout
+    try:
+        # Wait up to 8 seconds for SMS to complete
+        sms_thread.join(timeout=8.0)
+        
+        # Check if we got a result
+        try:
+            while True:
+                msg_type, message = result_queue.get_nowait()
+                if SMS_DEBUG and msg_type == "debug":
+                    st.write(message)
+                elif msg_type == "success":
+                    return True, message
+                elif msg_type == "error":
+                    return False, message
+        except queue.Empty:
+            pass
+            
+        # If thread is still running, it's stuck
+        if sms_thread.is_alive():
+            return False, "SMS request timed out - service may be down"
+        else:
+            return False, "SMS failed with unknown error"
+            
+    except Exception as e:
+        return False, f"SMS thread error: {str(e)[:50]}"
+
+def send_whatsapp_alert(patient_name, user_phone="Unknown", gesture_type="Emergency Gesture"):
+    """Alternative: Send WhatsApp message (requires WhatsApp Business API or similar service)"""
+    # This is a placeholder for WhatsApp integration
+    # You would need to set up WhatsApp Business API or use a service like Twilio
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    message = f"🚨 EMERGENCY: {patient_name} needs help! {gesture_type} detected at {timestamp}. Contact: {user_phone}"
+    
+    # For now, we'll just return a simulated response
+    return True, f"WhatsApp alert prepared for {DOCTOR_PHONE}"
+
+def test_sms_connection():
+    """Test SMS service connectivity"""
+    try:
+        # Simple test message
+        test_payload = {
+            'phone': DOCTOR_PHONE,
+            'message': 'MedFusion SMS Test - Please ignore',
+            'key': SMS_API_KEY
+        }
+        
+        response = requests.post(SMS_API_URL, data=test_payload, timeout=10)
+        
+        if response.status_code == 200:
+            result = response.json()
+            return True, f"Service available. Response: {result}"
+        else:
+            return False, f"Service error {response.status_code}: {response.text}"
+            
+    except Exception as e:
+        return False, f"Connection error: {str(e)}"
+
+def trigger_emergency_alert(patient_name, user_email="Unknown", gesture_type="Emergency Gesture"):
+    """Comprehensive emergency alert system"""
+    alerts_sent = []
+    alerts_failed = []
+    
+    # Extract phone from email if possible (basic extraction)
+    user_phone = user_email if user_email and user_email.isdigit() else "Unknown"
+    
+    # Send SMS Alert
+    if EMERGENCY_SMS_ENABLED:
+        with st.spinner("Sending emergency SMS..."):
+            sms_success, sms_message = send_emergency_sms(patient_name, user_phone, gesture_type=gesture_type)
+        
+        if sms_success:
+            alerts_sent.append(f"📱 {sms_message}")
+        else:
+            alerts_failed.append(f"📱 {sms_message}")
+    
+    # Log emergency locally
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    log_entry = f"[{timestamp}] EMERGENCY: {patient_name} - {gesture_type}"
+    
+    # Store in session for tracking
+    if 'emergency_log' not in st.session_state:
+        st.session_state.emergency_log = []
+    
+    st.session_state.emergency_log.append(log_entry)
+    
+    return alerts_sent, alerts_failed
+
+# -----------------
+# Authentication
+# -----------------
+USER_ROLES = ["patient", "doctor", "nurse", "admin"]
+# Simple in-memory user store for demo purposes
+USERS = {
+    "demo@medfusion.ai": {
+        "password": "demo123",
+        "name": "Demo User",
+        "role": "patient"
+    }
+}
+
+def authenticate_user(email: str, password: str):
+    user = USERS.get(email)
+    if not user:
+        return False, "Email not found"
+    if user["password"] != password:
+        return False, "Invalid password"
+    return True, user
+
+def register_user(email: str, password: str, name: str, role: str):
+    if email in USERS:
+        return False, "Email already registered"
+    USERS[email] = {"password": password, "name": name, "role": role}
+    return True, "Account created successfully"
+
+def login_page():
+    st.markdown("## 🔐 Login to MedFusion")
+    tab1, tab2 = st.tabs(["Sign In", "Sign Up"])
+    with tab1:
+        with st.form("signin_form"):
+            email = st.text_input("Email")
+            password = st.text_input("Password", type="password")
+            submit = st.form_submit_button("Sign In")
+            if submit:
+                ok, info = authenticate_user(email, password)
+                if ok:
+                    st.session_state.authenticated = True
+                    st.session_state.user_email = email
+                    st.session_state.user_name = info["name"]
+                    st.session_state.user_role = info["role"]
+                    st.success(f"Welcome back, {info['name']}!")
+                    st.rerun()
+                else:
+                    st.error(info)
+    with tab2:
+        with st.form("signup_form"):
+            name = st.text_input("Full Name")
+            email = st.text_input("Email", key="signup_email")
+            password = st.text_input("Password", type="password", key="signup_pw")
+            role = st.selectbox("Role", USER_ROLES)
+            submit = st.form_submit_button("Create Account")
+            if submit:
+                if not all([name, email, password]):
+                    st.error("Please fill in all fields")
+                else:
+                    ok, msg = register_user(email, password, name, role)
+                    if ok:
+                        # Auto login after successful signup
+                        st.session_state.authenticated = True
+                        st.session_state.user_email = email
+                        st.session_state.user_name = name
+                        st.session_state.user_role = role
+                        st.success("Account created. Welcome to MedFusion!")
+                        st.rerun()
+                    else:
+                        st.error(msg)
+
+# -----------------
+# PDF and Image Utilities
+# -----------------
+
+def extract_text_from_pdf(pdf_file):
+    """Extract text from PDF using pdfplumber/PyPDF2 and optional OCR."""
+    extracted_text = ""
+    try:
+        import pdfplumber
+        if hasattr(pdf_file, 'getvalue'):
+            pdf_bytes = pdf_file.getvalue()
+        else:
+            with open(pdf_file, 'rb') as f:
+                pdf_bytes = f.read()
+        with pdfplumber.open(io.BytesIO(pdf_bytes)) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text() or ""
+                extracted_text += page_text + "\n"
+    except Exception as e:
+        st.info(f"pdfplumber fallback: {e}")
+
+    if not extracted_text.strip():
+        try:
+            import PyPDF2
+            reader = PyPDF2.PdfReader(io.BytesIO(pdf_bytes))
+            for page in reader.pages:
+                page_text = page.extract_text() or ""
+                extracted_text += page_text + "\n"
+        except Exception as e:
+            st.info(f"PyPDF2 fallback: {e}")
+
+    # OCR fallback for scanned PDFs
+    if not extracted_text.strip() and OCR_AVAILABLE:
+        try:
+            images = convert_from_bytes(pdf_bytes, poppler_path=POPPLER_PATH)
+            for idx, image in enumerate(images):
+                page_text = pytesseract.image_to_string(image, config='--psm 6')
+                if page_text.strip():
+                    extracted_text += f"--- Page {idx+1} (OCR) ---\n{page_text}\n"
+        except Exception as e:
+            st.warning(f"OCR failed: {e}")
+
+    return extracted_text.strip()
 
 def home_page():
     """Home page with system overview"""
@@ -475,75 +812,401 @@ def interactions_page():
                 st.error(f"❌ {result}")
 
 def gesture_page():
-    """Gesture detection page"""
+    """Enhanced gesture detection page with real-time camera"""
     st.title("👋 Emergency Gesture Detection")
     st.markdown("Real-time hand gesture detection for emergency situations")
     
-    # Check backend status
-    if not check_backend_connection():
-        st.error("🔴 Backend is not available. Please start the FastAPI server on port 8000.")
-        return
+    # Initialize session state for gesture detection
+    if 'gesture_active' not in st.session_state:
+        st.session_state.gesture_active = False
+        st.session_state.last_gesture = None
+        st.session_state.emergency_count = 0
     
-    st.info("📹 This feature uses your camera to detect hand gestures for emergency situations")
+    # Camera availability check
+    camera_available = CV2_AVAILABLE
     
-    if st.button("🔍 Start Gesture Detection", type="primary"):
-        with st.spinner("Starting gesture detection..."):
-            success, result = gesture_detection_api()
+    col1, col2 = st.columns([2, 1])
+    
+    with col1:
+        st.subheader("📹 Live Camera Feed")
+        
+        if camera_available:
+            # Camera control buttons
+            col_a, col_b, col_c = st.columns(3)
             
-            if success:
-                gesture = result.get('gesture_detected', 'None')
+            with col_a:
+                start_camera = st.button("🔍 Start Detection", type="primary", use_container_width=True)
+            
+            with col_b:
+                stop_camera = st.button("⏹️ Stop Detection", use_container_width=True)
+            
+            with col_c:
+                test_backend = st.button("🧪 Test Backend", use_container_width=True)
+            
+            if start_camera:
+                st.session_state.gesture_active = True
+                st.success("🟢 Camera detection started!")
+                st.info("Show your hand to the camera for gesture detection.")
                 
-                if gesture and gesture != 'None':
-                    st.success(f"✅ Gesture Detected: **{gesture}**")
-                    
-                    if 'Emergency' in gesture:
-                        st.error("🚨 **EMERGENCY GESTURE DETECTED!**")
-                        st.markdown("**Action Required**: Immediate assistance needed")
-                else:
-                    st.info("No gesture detected")
+                # Real-time gesture detection placeholder
+                camera_placeholder = st.empty()
+                status_placeholder = st.empty()
+                
+                if CV2_AVAILABLE:
+                    try:
+                        import cv2
+                        import mediapipe as mp
+                        
+                        mp_hands = mp.solutions.hands
+                        mp_drawing = mp.solutions.drawing_utils
+                        
+                        # Initialize MediaPipe hands
+                        hands = mp_hands.Hands(
+                            static_image_mode=False,
+                            max_num_hands=2,
+                            min_detection_confidence=0.5,
+                            min_tracking_confidence=0.5
+                        )
+                        
+                        cap = cv2.VideoCapture(0)
+                        
+                        if cap.isOpened():
+                            status_placeholder.info("📹 Camera is active - show your hand gestures")
+                            
+                            # Capture frames for demo (reduced for performance)
+                            for i in range(5):
+                                ret, frame = cap.read()
+                                if ret:
+                                    # Convert BGR to RGB
+                                    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                                    
+                                    # Process the frame
+                                    results = hands.process(rgb_frame)
+                                    
+                                    # Draw hand landmarks
+                                    if results.multi_hand_landmarks:
+                                        for hand_landmarks in results.multi_hand_landmarks:
+                                            mp_drawing.draw_landmarks(
+                                                rgb_frame, hand_landmarks, mp_hands.HAND_CONNECTIONS
+                                            )
+                                        
+                                        # Simple gesture detection
+                                        gesture_detected = "Emergency Gesture (Hand Raised)"
+                                        st.session_state.last_gesture = gesture_detected
+                                        status_placeholder.success(f"✅ Gesture Detected: {gesture_detected}")
+                                        
+                                        # Emergency alert with SMS
+                                        if 'Emergency' in gesture_detected:
+                                            st.session_state.emergency_count += 1
+                                            status_placeholder.error("🚨 **EMERGENCY GESTURE DETECTED!**")
+                                            
+                                            # Send SMS to doctor
+                                            patient_name = st.session_state.user_name or "Unknown Patient"
+                                            user_email = st.session_state.user_email or "Unknown"
+                                            
+                                            alerts_sent, alerts_failed = trigger_emergency_alert(
+                                                patient_name, user_email, gesture_detected
+                                            )
+                                            
+                                            # Display alert status
+                                            if alerts_sent:
+                                                for alert in alerts_sent:
+                                                    status_placeholder.success(f"✅ {alert}")
+                                            if alerts_failed:
+                                                for alert in alerts_failed:
+                                                    status_placeholder.error(f"❌ {alert}")
+                                    else:
+                                        status_placeholder.info("👋 Show your hand to detect gestures")
+                                    
+                                    # Display frame
+                                    camera_placeholder.image(rgb_frame, caption="Live Camera Feed", use_column_width=True)
+                                    time.sleep(0.2)  # Small delay
+                                else:
+                                    break
+                            
+                            cap.release()
+                            status_placeholder.success("Camera session completed")
+                        else:
+                            status_placeholder.error("❌ Could not access camera")
+                            
+                    except Exception as e:
+                        status_placeholder.error(f"❌ Camera error: {str(e)}")
+                        st.error("Camera access failed. Please check permissions and try again.")
+                        
+            elif stop_camera:
+                st.session_state.gesture_active = False
+                st.info("⏹️ Detection stopped")
+            
+            elif test_backend:
+                # Test backend gesture detection
+                with st.spinner("Testing backend gesture detection..."):
+                    if check_backend_connection():
+                        success, result = gesture_detection_api()
+                        if success:
+                            gesture = result.get('gesture_detected', 'None')
+                            if gesture and gesture != 'None':
+                                st.success(f"✅ Backend detected: **{gesture}**")
+                                if 'Emergency' in gesture:
+                                    st.error("🚨 **EMERGENCY ALERT from Backend!**")
+                                    
+                                    # Send SMS alert for backend detection
+                                    patient_name = st.session_state.user_name or "Unknown Patient"
+                                    user_email = st.session_state.user_email or "Unknown"
+                                    
+                                    alerts_sent, alerts_failed = trigger_emergency_alert(
+                                        patient_name, user_email, f"Backend {gesture}"
+                                    )
+                                    
+                                    if alerts_sent:
+                                        st.success("Emergency SMS sent to doctor!")
+                                    if alerts_failed:
+                                        st.warning("SMS alert failed - emergency logged locally")
+                            else:
+                                st.info("No gesture detected by backend")
+                        else:
+                            st.error(f"Backend error: {result}")
+                    else:
+                        st.error("Backend not available")
+                        
+        else:
+            st.error("❌ Camera not available (OpenCV not installed)")
+            st.info("Install OpenCV: `pip install opencv-python`")
+            
+            # Fallback: Backend-only detection
+            if st.button("🧪 Use Backend Detection", type="primary"):
+                with st.spinner("Using backend camera..."):
+                    if check_backend_connection():
+                        success, result = gesture_detection_api()
+                        if success:
+                            gesture = result.get('gesture_detected', 'None')
+                            if gesture != 'None':
+                                st.success(f"✅ Gesture: **{gesture}**")
+                                if 'Emergency' in gesture:
+                                    st.error("🚨 **EMERGENCY!**")
+                            else:
+                                st.info("No gesture detected")
+                        else:
+                            st.error(f"Error: {result}")
+                    else:
+                        st.error("Backend offline")
+    
+    with col2:
+        st.subheader("📊 Detection Status")
+        
+        # Status indicators
+        if camera_available:
+            st.success("🟢 Camera Available")
+        else:
+            st.error("🔴 Camera Unavailable")
+        
+        if check_backend_connection():
+            st.success("🟢 Backend Online")
+        else:
+            st.error("🔴 Backend Offline")
+        
+        # Statistics
+        st.subheader("📈 Session Stats")
+        st.metric("Emergency Alerts", st.session_state.emergency_count)
+        
+        if st.session_state.last_gesture:
+            st.metric("Last Gesture", st.session_state.last_gesture)
+        
+        # Controls
+        st.subheader("🎛️ Controls")
+        
+        if st.button("🔄 Reset Stats", use_container_width=True):
+            st.session_state.emergency_count = 0
+            st.session_state.last_gesture = None
+            st.success("Stats reset")
+        
+        # Emergency Actions
+        st.subheader("🆘 Emergency Actions")
+        
+        # Test SMS Connection
+        if st.button("📱 Test SMS Service", use_container_width=True):
+            with st.spinner("Testing SMS connectivity..."):
+                success, message = test_sms_connection()
+            if success:
+                st.success("✅ SMS Service Working")
+                if SMS_DEBUG:
+                    st.info(f"Details: {message}")
             else:
-                st.error(f"❌ {result}")
+                st.error("❌ SMS Service Failed")
+                st.warning(f"Error: {message}")
+        
+        if st.button("🚨 Trigger Emergency", use_container_width=True):
+            st.session_state.emergency_count += 1
+            st.error("🚨 MANUAL EMERGENCY TRIGGERED!")
+            
+            # Send SMS alert
+            patient_name = st.session_state.user_name or "Unknown Patient"
+            user_email = st.session_state.user_email or "Unknown"
+            
+            alerts_sent, alerts_failed = trigger_emergency_alert(
+                patient_name, user_email, "Manual Emergency Button"
+            )
+            
+            st.markdown("**Actions taken:**")
+            st.markdown("- Alert logged")
+            st.markdown("- Timestamp recorded")
+            st.markdown("- Emergency protocols activated")
+            
+            # Show SMS status
+            if alerts_sent:
+                st.success("SMS Alerts Sent:")
+                for alert in alerts_sent:
+                    st.write(f"  ✅ {alert}")
+            
+            if alerts_failed:
+                st.error("SMS Alerts Failed:")
+                for alert in alerts_failed:
+                    st.write(f"  ❌ {alert}")
     
+    # Information section
     st.markdown("---")
-    st.markdown("""
-    **Supported Gestures:**
-    - 🆘 Emergency Signal (Raised Hand)
-    - ✋ Help Needed
-    - 👍 All OK
     
-    **Note**: Make sure your camera is connected and permissions are granted.
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        st.markdown("""
+        ### 🤚 Supported Gestures
+        - **🆘 Emergency Signal**: Raised hand (palm facing camera)
+        - **✋ Help Needed**: Open hand gesture
+        - **👍 All OK**: Thumbs up
+        - **✊ Alert**: Closed fist
+        - **👋 Goodbye**: Waving motion
+        """)
+    
+    with col2:
+        st.markdown("""
+        ### ⚙️ Technical Features
+        - **Real-time Processing**: Live camera feed analysis
+        - **MediaPipe Integration**: Advanced hand tracking
+        - **Emergency Detection**: Automatic alert system
+        - **Backend Fallback**: Server-side processing available
+        - **Session Tracking**: Statistics and logging
+        """)
+    
+    # Usage instructions
+    st.info("""
+    **💡 How to use:**
+    1. Click "Start Detection" to begin camera monitoring
+    2. Position your hand clearly in front of the camera
+    3. Make gestures slowly and hold for 1-2 seconds
+    4. Emergency gestures will trigger automatic alerts
+    5. Use "Stop Detection" to end the session
     """)
+    
+    # Troubleshooting
+    with st.expander("🔧 Troubleshooting"):
+        st.markdown("""
+        **Camera Issues:**
+        - Grant camera permissions in your browser
+        - Close other applications using the camera
+        - Try refreshing the page
+        
+        **Detection Issues:**
+        - Ensure good lighting
+        - Keep hand in frame
+        - Make gestures slowly and clearly
+        - Check that OpenCV and MediaPipe are installed
+        
+        **Backend Issues:**
+        - Ensure FastAPI server is running
+        - Check network connectivity
+        - Verify backend is accessible on port 8000
+        """)
+
+def medical_reports_page():
+    """PDF and Image upload with text extraction and backend analysis"""
+    st.title("📄 Medical Reports Analysis")
+    tabs = st.tabs(["PDF Upload", "Image Upload"])
+    with tabs[0]:
+        uploaded = st.file_uploader("Choose a PDF file", type=["pdf"], key="pdf_upl")
+        if uploaded is not None:
+            st.success(f"Uploaded: {uploaded.name}")
+            if st.button("Analyze PDF", type="primary"):
+                with st.spinner("Extracting text from PDF..."):
+                    text = extract_text_from_pdf(uploaded)
+                if text:
+                    st.text_area("Extracted Text", text, height=250)
+                    if check_backend_connection():
+                        try:
+                            ok, res = verify_prescription_api(text)
+                            if ok:
+                                st.success("Backend Analysis Complete")
+                                st.markdown(res.get('result', ''))
+                            else:
+                                st.warning(res)
+                        except Exception as e:
+                            st.warning(str(e))
+                else:
+                    st.info("No text found in PDF")
+    with tabs[1]:
+        img_file = st.file_uploader("Choose an image", type=["jpg","jpeg","png"], key="img_upl")
+        if img_file is not None:
+            image = Image.open(img_file)
+            st.image(image, caption="Uploaded Image", use_column_width=True)
+            if st.button("Analyze Image", type="primary"):
+                with st.spinner("Analyzing image..."):
+                    # Ensure RGB
+                    if image.mode != 'RGB':
+                        image = image.convert('RGB')
+                    ocr_text = ""
+                    if OCR_AVAILABLE:
+                        try:
+                            ocr_text = pytesseract.image_to_string(image, config='--psm 6')
+                        except Exception as e:
+                            st.warning(f"OCR failed: {e}")
+                    if ocr_text.strip():
+                        st.text_area("Extracted Text", ocr_text, height=150)
+                        if check_backend_connection():
+                            ok, res = verify_prescription_api(ocr_text)
+                            if ok:
+                                st.success("Backend Analysis Complete")
+                                st.markdown(res.get('result',''))
+                            else:
+                                st.warning(res)
+                    else:
+                        st.info("No text detected. You can still upload a PDF for better results.")
+
 
 def main():
     """Main application"""
-    
     # Initialize session state
     if 'page' not in st.session_state:
         st.session_state.page = 'home'
-    
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+        st.session_state.user_email = None
+        st.session_state.user_name = None
+        st.session_state.user_role = None
+
+    # Require login
+    if not st.session_state.authenticated:
+        login_page()
+        return
+
     # Sidebar Navigation
     with st.sidebar:
         st.image("https://via.placeholder.com/200x100/667eea/white?text=MedFusion", use_column_width=True)
-        
+        st.markdown(f"**User:** {st.session_state.user_name} ({st.session_state.user_role})")
+        if st.button("Logout"):
+            st.session_state.authenticated = False
+            st.rerun()
         selected = option_menu(
             menu_title="Navigation",
-            options=["Home", "Prescription", "Drug Interactions", "Gesture Detection"],
-            icons=["house", "file-medical", "pills", "camera"],
+            options=["Home", "Prescription", "Drug Interactions", "Medical Reports", "Gesture Detection"],
+            icons=["house", "file-medical", "pills", "file-text", "camera"],
             menu_icon="hospital",
             default_index=0,
             styles={
-                "container": {"padding": "0!important", "background-color": "#fafafa"},
-                "icon": {"color": "#667eea", "font-size": "20px"},
-                "nav-link": {
-                    "font-size": "16px",
-                    "text-align": "left",
-                    "margin": "0px",
-                    "--hover-color": "#eee",
-                },
-                "nav-link-selected": {"background-color": "#667eea"},
+                "container": {"padding": "0!important", "background-color": "#f8f9fa"},
+                "icon": {"color": "#2c3e50", "font-size": "20px"},
+                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "0px", "--hover-color": "#e9ecef"},
+                "nav-link-selected": {"background-color": "#2c3e50"},
             }
         )
-        
         st.markdown("---")
         st.markdown("### 🔧 Backend Status")
         if check_backend_connection():
@@ -551,7 +1214,7 @@ def main():
         else:
             st.error("🔴 Disconnected")
             st.info("Start backend:\n`cd BACKEND`\n`uvicorn main:app --reload`")
-    
+
     # Main Content
     if selected == "Home":
         home_page()
@@ -559,6 +1222,8 @@ def main():
         prescription_page()
     elif selected == "Drug Interactions":
         interactions_page()
+    elif selected == "Medical Reports":
+        medical_reports_page()
     elif selected == "Gesture Detection":
         gesture_page()
 

@@ -1,8 +1,14 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 from prescription import check_prescription, extract_medications, check_drug_interactions
-from gesture import detect_gesture
 from typing import Dict, List, Optional
+
+# Import gesture only if available (may fail on server without webcam)
+try:
+    from gesture import detect_gesture
+except Exception as e:
+    detect_gesture = None
+    print(f"Warning: Gesture detection unavailable: {e}")
 
 app = FastAPI(title="MedFusion Backend")
 
@@ -70,5 +76,7 @@ def extract_medications_endpoint(data: Prescription):
 # Gesture detection API
 @app.get("/gesture_detect")
 def gesture_detect():
+    if detect_gesture is None:
+        return {"error": "Gesture detection unavailable on this server", "gesture_detected": None}
     gesture = detect_gesture()
     return {"gesture_detected": gesture}

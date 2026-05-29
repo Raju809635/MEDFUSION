@@ -845,8 +845,15 @@ def check_prescription(text: str, patient_profile: Dict = None) -> str:
     
     # Alternative suggestions
     if interaction_results["alternatives"]:
-        unique_alternatives = list(set(interaction_results["alternatives"]))
-        analysis_parts.append(f"💊 **Alternative Medications**: {', '.join(unique_alternatives)}")
+        alt_list = []
+        for alt in interaction_results["alternatives"]:
+            if isinstance(alt, dict):
+                alt_list.append(alt.get('alternative', str(alt)))
+            else:
+                alt_list.append(str(alt))
+        unique_alternatives = list(set(alt_list))
+        if unique_alternatives:
+            analysis_parts.append(f"💊 **Alternative Medications**: {', '.join(unique_alternatives)}")
     
     # Patient-specific recommendations
     if interaction_results["recommendations"]:

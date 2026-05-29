@@ -1,0 +1,26 @@
+version: '3.8'
+
+services:
+  medfusion-frontend:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - API_BASE_URL=http://backend:8000
+    depends_on:
+      - backend
+    volumes:
+      - ./.streamlit:/app/.streamlit
+    restart: unless-stopped
+
+  backend:
+    build: ../BACKEND
+    ports:
+      - "8000:8000"
+    environment:
+      - PYTHONPATH=/app
+    restart: unless-stopped
+
+networks:
+  default:
+    name: medfusion-network
