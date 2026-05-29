@@ -452,6 +452,84 @@ def login_page():
 # PDF and Image Utilities
 # -----------------
 
+def preprocess_image_for_ocr(image):
+    """
+    Preprocess image to improve OCR accuracy.
+    Converts to grayscale, enhances contrast, and applies thresholding.
+    """
+    try:
+        # Convert PIL image to numpy array if needed
+        if isinstance(image, Image.Image):
+            # Convert to RGB first to ensure compatibility
+            if image.mode != 'RGB':
+                image = image.convert('RGB')
+            img_array = np.array(image)
+        else:
+            img_array = image
+        
+        # Convert to grayscale
+        if len(img_array.shape) == 3:
+            gray = cv2.cvtColor(img_array, cv2.COLOR_RGB2GRAY)
+        else:
+            gray = img_array
+        
+        # Enhance contrast using CLAHE (Contrast Limited Adaptive Histogram Equalization)
+        clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8,8))
+        enhanced = clahe.apply(gray)
+        
+        # Apply bilateral filter to reduce noise while keeping edges sharp
+        denoised = cv2.bilateralFilter(enhanced, 9, 75, 75)
+        
+        # Apply thresholding for better text detection
+        _, thresh = cv2.threshold(denoised, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU)
+        
+        # Convert back to PIL Image for pytesseract
+        return Image.fromarray(thresh)
+    except Exception as e:
+        st.warning(f"Image preprocessing failed, using original: {e}")
+        if isinstance(image, Image.Image):
+            return image
+        return Image.fromarray(image)
+
+def extract_text_from_ocr(image, use_preprocessing=True):
+    """
+    Extract text from image using Tesseract OCR with preprocessing.
+    Tries multiple PSM (Page Segmentation Mode) options for better accuracy.
+    """
+    if not OCR_AVAILABLE:
+        return ""
+    
+    try:
+        # Preprocess the image for better OCR accuracy
+        if use_preprocessing and CV2_AVAILABLE:
+            processed_image = preprocess_image_for_ocr(image)
+        else:
+            if isinstance(image, Image.Image) and image.mode != 'RGB':
+                processed_image = image.convert('RGB')
+            else:
+                processed_image = image
+        
+        # Try different PSM modes for better text detection
+        psm_modes = [
+            '--psm 6',  # Assume single block of text
+            '--psm 3',  # Fully automatic page segmentation
+            '--psm 11', # Sparse text with OSD
+        ]
+        
+        best_text = ""
+        for psm in psm_modes:
+            try:
+                text = pytesseract.image_to_string(processed_image, config=psm + ' --oem 3')
+                if len(text.strip()) > len(best_text.strip()):
+                    best_text = text
+            except:
+                continue
+        
+        return best_text
+    except Exception as e:
+        st.error(f"OCR extraction failed: {e}")
+        return ""
+
 def extract_text_from_pdf(pdf_file):
     """Extract text from PDF using pdfplumber/PyPDF2 and optional OCR."""
     extracted_text = ""
@@ -484,7 +562,7 @@ def extract_text_from_pdf(pdf_file):
         try:
             images = convert_from_bytes(pdf_bytes, poppler_path=POPPLER_PATH)
             for idx, image in enumerate(images):
-                page_text = pytesseract.image_to_string(image, config='--psm 6')
+                page_text = extract_text_from_ocr(image, use_preprocessing=True)
                 if page_text.strip():
                     extracted_text += f"--- Page {idx+1} (OCR) ---\n{page_text}\n"
         except Exception as e:
@@ -1163,16 +1241,13 @@ def medical_reports_page():
             image = Image.open(img_file)
             st.image(image, caption="Uploaded Image", use_column_width=True)
             if st.button("Analyze Image", type="primary"):
-                with st.spinner("Analyzing image..."):
+                with st.spinner("Analyzing image with advanced OCR..."):
                     # Ensure RGB
                     if image.mode != 'RGB':
                         image = image.convert('RGB')
                     ocr_text = ""
                     if OCR_AVAILABLE:
-                        try:
-                            ocr_text = pytesseract.image_to_string(image, config='--psm 6')
-                        except Exception as e:
-                            st.warning(f"OCR failed: {e}")
+                        ocr_text = extract_text_from_ocr(image, use_preprocessing=True)
                     if ocr_text.strip():
                         st.text_area("Extracted Text", ocr_text, height=150)
                         if check_backend_connection():
