@@ -328,6 +328,27 @@ st.markdown("""
     .streamlit-expanderHeader {
         color: white !important;
     }
+    
+    /* Fix option menu text visibility */
+    div[role="option"] {
+        color: white !important;
+    }
+    
+    div[class*="nav-link"] {
+        color: white !important;
+    }
+    
+    /* Ensure all text in sidebar is visible */
+    [data-testid="stSidebar"] p, 
+    [data-testid="stSidebar"] div,
+    [data-testid="stSidebar"] a {
+        color: white !important;
+    }
+    
+    /* Option menu specific fix */
+    .streamlit-Option {
+        color: white !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -1546,10 +1567,10 @@ def main():
             menu_icon="hospital",
             default_index=0,
             styles={
-                "container": {"padding": "0.5rem 0", "background-color": "transparent"},
+                "container": {"padding": "0.5rem 0", "background-color": "rgba(10, 30, 63, 0.5)"},
                 "icon": {"color": "#00d9ff", "font-size": "20px"},
-                "nav-link": {"font-size": "15px", "text-align": "left", "margin": "0.3rem 0", "padding": "0.75rem 1rem", "border-radius": "8px", "color": "#ffffff", "font-weight": "500", "--hover-color": "rgba(0, 168, 232, 0.3)"},
-                "nav-link-selected": {"background-color": "rgba(0, 217, 255, 0.3)", "color": "#00d9ff", "font-weight": "700"},
+                "nav-link": {"font-size": "16px", "text-align": "left", "margin": "0.5rem 0", "padding": "1rem", "border-radius": "8px", "color": "#ffffff", "font-weight": "600", "background-color": "rgba(26, 58, 82, 0.3)", "--hover-color": "rgba(0, 168, 232, 0.5)"},
+                "nav-link-selected": {"background-color": "rgba(0, 217, 255, 0.4)", "color": "#ffffff", "font-weight": "700", "border": "2px solid #00d9ff"},
             }
         )
         st.markdown("---")
